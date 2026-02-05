@@ -1,0 +1,58 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import nltk
+import re
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+
+nltk.download('stopwords')
+stop_words = set(stopwords.words('english'))
+stemmer = PorterStemmer()
+
+def preprocess_text(text):
+    text = re.sub(r'[^a-zA-Z\s]', '', text, re.I|re.A)
+    text = text.lower()
+    text = text.split()
+    text = [stemmer.stem(word) for word in text if word not in stop_words]
+    return " ".join(text)
+    
+url = "https://raw.githubusercontent.com/amankharwal/SMS-Spam-Detection/master/spam.csv"
+df = pd.read_csv(url, encoding='latin-1')
+
+df = df.iloc[:, [0, 1]] 
+df.columns = ['label', 'text']
+
+df['text_clean'] = df['text'].apply(preprocess_text)
+
+X_train, X_test, y_train, y_test = train_test_split(df['text_clean'], df['label'], test_size=0.2, random_state=42)
+
+tfidf = TfidfVectorizer()
+X_train_tfidf = tfidf.fit_transform(X_train)
+X_test_tfidf = tfidf.transform(X_test)
+
+model = MultinomialNB()
+model.fit(X_train_tfidf, y_train)
+
+y_pred = model.predict(X_test_tfidf)
+
+print(classification_report(y_test, y_pred))
+
+cm = confusion_matrix(y_test, y_pred, labels=model.classes_)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
+disp.plot(cmap='Blues')
+plt.title('Confusion Matrix')
+plt.show()
+
+def predict_message(message):
+    clean_msg = preprocess_text(message)
+    msg_vector = tfidf.transform([clean_msg])
+    prediction = model.predict(msg_vector)[0]
+    return prediction
+
+print(predict_message("Congratulations! You've won a $1000 gift card. Click here."))
